@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+
+option go_package = "github.com/carpioldc/go-rsh-grpc";
+
+package rsh;
+
+service RemoteShell {
+    rpc Session (stream Input) returns (stream Output) {}
+}
+
+message Input {
+    int32 Signal = 1;
+    bytes Bytes = 2;
+}
+
+message Output {
+    bytes Bytes = 1;
+}

@@ -88,7 +88,6 @@ func (c *Client) ExecContext(ctx context.Context, opts *ExecOptions) (*int, erro
 		syscall.SIGQUIT,
 		syscall.SIGTERM,
 	)
-	defer close(sigc)
 
 	go c.readTTY(stream.Context(), inc)
 
@@ -102,8 +101,6 @@ func (c *Client) ExecContext(ctx context.Context, opts *ExecOptions) (*int, erro
 }
 
 func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
-	defer close(inc)
-
 	tty, err := tty.Open()
 	if err != nil {
 		log.Fatal(err)
@@ -126,16 +123,21 @@ func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
 	}()
 
 	<-ctx.Done()
-	log.Println("Exiting readTTY")
+	log.Println("DEBUG", "Exiting readTTY")
 	close(inc)
 	return
 }
 
 func (c *Client) restoreTTY() {
+	if c.ttyState == nil {
+		return
+	}
+
 	err := term.Restore(int(os.Stdin.Fd()), c.ttyState)
 	if err != nil {
 		log.Println("Error restoring old terminal state:", err)
 	}
+
 	log.Println("DEBUG", "Restored old terminal state,", c.ttyState)
 }
 

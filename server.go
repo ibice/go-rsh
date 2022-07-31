@@ -2,6 +2,7 @@ package rsh
 
 import (
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/ibice/go-rsh/pb"
@@ -37,4 +38,25 @@ func (s *Server) Serve() error {
 	reflection.Register(g)
 
 	return g.Serve(l)
+}
+
+type rshServer struct {
+	pb.UnimplementedRemoteShellServer
+	shell string
+}
+
+func newRSHServer(shell string) *rshServer {
+	return &rshServer{shell: shell}
+}
+
+func (s *rshServer) Session(stream pb.RemoteShell_SessionServer) error {
+	log.Println("Opening session")
+
+	if err := newSession(stream, s.shell, nil).start(); err != nil {
+		return fmt.Errorf("session: %v", err)
+	}
+
+	log.Println("Session closed")
+
+	return nil
 }

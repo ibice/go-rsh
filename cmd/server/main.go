@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	port  = flag.Uint("port", 22222, "listen port")
-	addr  = flag.String("addr", "127.0.0.1", "listen address")
-	shell = flag.String("shell", os.Getenv("SHELL"), "default shell to use")
+	port  = flag.Uint("p", 22222, "listen port")
+	addr  = flag.String("a", "127.0.0.1", "listen address")
+	shell = flag.String("s", os.Getenv("SHELL"), "default shell to use")
 
 	lastResortShell = "/bin/sh"
 )
@@ -21,7 +21,7 @@ func parseArgs() {
 	flag.Parse()
 
 	if port == nil || *port == 0 {
-		log.Fatal("-port is required")
+		log.Fatal("-p is required")
 	}
 
 	if *port > 65535 {
@@ -29,7 +29,7 @@ func parseArgs() {
 	}
 
 	if addr == nil || *addr == "" {
-		log.Fatal("-addr is required")
+		log.Fatal("-a is required")
 	}
 
 	if shell == nil || *shell == "" {

@@ -9,17 +9,16 @@ build: build-server build-client
 .PHONY: build-server
 build-server:
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -o bin/gorshd ./cmd/server
+	CGO_ENABLED=0 go build -o bin/gshd ./cmd/server
 
 .PHONY: build-client
 build-client:
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -o bin/gorsh ./cmd/client
+	CGO_ENABLED=0 go build -o bin/gsh ./cmd/client
 
 .PHONY: install
 install:
-	install bin/gorshd ~/.local/bin
-	install bin/gorsh ~/.local/bin
+	install bin/* ~/.local/bin
 
 .PHONY: gen
 gen:

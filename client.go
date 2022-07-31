@@ -21,8 +21,9 @@ import (
 
 // Client is the remote shell client.
 type Client struct {
-	server string
-	creds  credentials.TransportCredentials
+	server   string
+	creds    credentials.TransportCredentials
+	ttyState *term.State
 }
 
 // NewClientInsecure creates an insecure client.
@@ -33,17 +34,23 @@ func NewClientInsecure(server string) *Client {
 	}
 }
 
+// ExecOptions are the options for Exec.
+type ExecOptions struct {
+	Command string
+	Args    []string
+}
+
 // Exec executes a command in the server.
-func (c *Client) Exec() error {
-	return c.ExecContext(context.Background())
+func (c *Client) Exec(opts *ExecOptions) (*int, error) {
+	return c.ExecContext(context.Background(), opts)
 }
 
 // ExecContext is like Exec, but with context.
-func (c *Client) ExecContext(ctx context.Context) error {
+func (c *Client) ExecContext(ctx context.Context, opts *ExecOptions) (*int, error) {
 
 	conn, err := grpc.Dial(c.server, grpc.WithTransportCredentials(c.creds))
 	if err != nil {
-		return fmt.Errorf("dial: %v", err)
+		return nil, fmt.Errorf("dial: %v", err)
 	}
 	defer conn.Close()
 
@@ -51,7 +58,22 @@ func (c *Client) ExecContext(ctx context.Context) error {
 
 	stream, err := client.Session(ctx)
 	if err != nil {
-		return fmt.Errorf("start session: %v", err)
+		return nil, fmt.Errorf("start session: %v", err)
+	}
+
+	if opts == nil {
+		opts = &ExecOptions{}
+	}
+
+	log.Println("DEBUG", "ExecOpts", opts)
+
+	err = stream.Send(&pb.Input{
+		Start:   true,
+		Command: opts.Command,
+		Args:    opts.Args,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("send cmd: %v", err)
 	}
 
 	var (
@@ -66,30 +88,32 @@ func (c *Client) ExecContext(ctx context.Context) error {
 		syscall.SIGQUIT,
 		syscall.SIGTERM,
 	)
+	defer close(sigc)
 
 	go c.readTTY(stream.Context(), inc)
 
-	go c.readStream(stream)
+	defer c.restoreTTY()
+
+	go c.writeStream(stream, inc, sigc)
 
 	sigc <- syscall.SIGWINCH
 
-	c.writeStream(stream, inc, sigc)
-
-	return nil
+	return c.readStream(stream)
 }
 
 func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
+	defer close(inc)
+
 	tty, err := tty.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer tty.Close()
 
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	c.ttyState, err = term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
-	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 	go func() {
 		for {
@@ -101,26 +125,43 @@ func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
 		}
 	}()
 
-	for {
-		<-ctx.Done()
-		close(inc)
-		return
-	}
+	<-ctx.Done()
+	log.Println("Exiting readTTY")
+	close(inc)
+	return
 }
 
-func (c *Client) readStream(stream pb.RemoteShell_SessionClient) {
+func (c *Client) restoreTTY() {
+	err := term.Restore(int(os.Stdin.Fd()), c.ttyState)
+	if err != nil {
+		log.Println("Error restoring old terminal state:", err)
+	}
+	log.Println("DEBUG", "Restored old terminal state,", c.ttyState)
+}
+
+func (c *Client) readStream(stream pb.RemoteShell_SessionClient) (*int, error) {
 	for {
 		select {
 		case <-stream.Context().Done():
-			return
+			log.Println("Client stream context done")
+			return nil, nil
+
 		default:
 			out, err := stream.Recv()
 			if err == io.EOF {
-				return
+				log.Print("Server returned EOF")
+				return nil, nil
 			}
+
 			if err != nil {
-				log.Println(err)
+				return nil, err
 			}
+
+			if out.ExitCode != 0 || len(out.Bytes) == 0 {
+				var exitCode int = int(out.ExitCode)
+				return &exitCode, nil
+			}
+
 			os.Stdout.Write(out.Bytes)
 		}
 	}
@@ -130,13 +171,20 @@ func (c *Client) writeStream(stream pb.RemoteShell_SessionClient, inc <-chan run
 
 	for {
 		select {
+		case <-stream.Context().Done():
+			return
+
 		case r := <-inc:
 			stream.Send(&pb.Input{Bytes: []byte{byte(r)}})
 
 		case sig := <-sigc:
+			if sig == nil {
+				continue
+			}
+
 			s, ok := sig.(syscall.Signal)
 			if !ok {
-				log.Println("Error forwarding signal: are you in windows?")
+				log.Println("Error forwarding signal: os.Signal is not syscall.Signal, signal:", sig.String())
 				break
 			}
 
@@ -158,10 +206,6 @@ func (c *Client) writeStream(stream pb.RemoteShell_SessionClient, inc <-chan run
 			default:
 				stream.Send(&pb.Input{Signal: int32(s)})
 			}
-
-		case <-stream.Context().Done():
-			stream.CloseSend()
-			return
 		}
 	}
 }

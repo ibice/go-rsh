@@ -11,9 +11,13 @@ service RemoteShell {
 
 message Input {
     int32 Signal = 1;
-    bytes Bytes = 2;
+    bytes Bytes= 2;
+    bool Start = 3;
+    string Command = 4;
+    repeated string Args = 5;
 }
 
 message Output {
     bytes Bytes = 1;
+    int32 ExitCode = 2;
 }

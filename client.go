@@ -63,13 +63,13 @@ func (c *Client) ExecContext(ctx context.Context) error {
 		syscall.SIGTERM,
 	)
 
-	go c.readTTY(ctx, inc)
+	go c.readTTY(stream.Context(), inc)
 
-	go c.readStream(ctx, stream)
+	go c.readStream(stream)
 
 	sigc <- syscall.SIGWINCH
 
-	c.writeStream(ctx, inc, sigc, stream)
+	c.writeStream(stream, inc, sigc)
 
 	return nil
 }
@@ -104,10 +104,10 @@ func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
 	}
 }
 
-func (c *Client) readStream(ctx context.Context, stream pb.RemoteShell_SessionClient) {
+func (c *Client) readStream(stream pb.RemoteShell_SessionClient) {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-stream.Context().Done():
 			return
 		default:
 			out, err := stream.Recv()
@@ -122,8 +122,7 @@ func (c *Client) readStream(ctx context.Context, stream pb.RemoteShell_SessionCl
 	}
 }
 
-func (c *Client) writeStream(ctx context.Context, inc <-chan rune, sigc <-chan os.Signal,
-	stream pb.RemoteShell_SessionClient) {
+func (c *Client) writeStream(stream pb.RemoteShell_SessionClient, inc <-chan rune, sigc <-chan os.Signal) {
 
 	for {
 		select {
@@ -156,7 +155,7 @@ func (c *Client) writeStream(ctx context.Context, inc <-chan rune, sigc <-chan o
 				stream.Send(&pb.Input{Signal: int32(s)})
 			}
 
-		case <-ctx.Done():
+		case <-stream.Context().Done():
 			stream.CloseSend()
 			return
 		}

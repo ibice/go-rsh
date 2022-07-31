@@ -19,11 +19,13 @@ import (
 	"github.com/ibice/go-rsh/pb"
 )
 
+// Client is the remote shell client.
 type Client struct {
 	server string
 	creds  credentials.TransportCredentials
 }
 
+// NewClientInsecure creates an insecure client.
 func NewClientInsecure(server string) *Client {
 	return &Client{
 		server: server,
@@ -31,10 +33,12 @@ func NewClientInsecure(server string) *Client {
 	}
 }
 
+// Exec executes a command in the server.
 func (c *Client) Exec() error {
 	return c.ExecContext(context.Background())
 }
 
+// ExecContext is like Exec, but with context.
 func (c *Client) ExecContext(ctx context.Context) error {
 
 	conn, err := grpc.Dial(c.server, grpc.WithTransportCredentials(c.creds))

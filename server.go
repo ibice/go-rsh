@@ -9,11 +9,13 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// Server is the remote shell server.
 type Server struct {
 	address string
 	shell   string
 }
 
+// NewServer creates a new remote shell server.
 func NewServer(address string, shell string) *Server {
 	return &Server{
 		address: address,
@@ -21,6 +23,7 @@ func NewServer(address string, shell string) *Server {
 	}
 }
 
+// Serve starts the server.
 func (s *Server) Serve() error {
 	l, err := net.Listen("tcp", s.address)
 	if err != nil {

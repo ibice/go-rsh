@@ -1,4 +1,4 @@
-package main
+package rsh
 
 import (
 	"context"
@@ -6,25 +6,36 @@ import (
 	"io"
 	"log"
 	"os/exec"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/creack/pty"
 
-	pb "github.com/ibice/go-rsh"
+	"github.com/ibice/go-rsh/pb"
 )
 
-type server struct {
+type streamWriter struct {
+	stream pb.RemoteShell_SessionServer
+}
+
+func (s streamWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	if n > 0 {
+		s.stream.Send(&pb.Output{Bytes: p})
+	}
+	return n, nil
+}
+
+type rshServer struct {
 	pb.UnimplementedRemoteShellServer
 	shell string
 }
 
-func newServer() *server {
-	return &server{shell: *shell}
+func newRSHServer(shell string) *rshServer {
+	return &rshServer{shell: shell}
 }
 
-func (s *server) Session(stream pb.RemoteShell_SessionServer) error {
+func (s *rshServer) Session(stream pb.RemoteShell_SessionServer) error {
 	log.Println("Opening remote shell session")
 
 	var (
@@ -40,7 +51,7 @@ func (s *server) Session(stream pb.RemoteShell_SessionServer) error {
 	}
 	defer ptmx.Close()
 
-	go readStream(ctx, cancel, stream, inc)
+	go s.readStream(ctx, cancel, stream, inc)
 
 	go func() {
 		defer cancel()
@@ -83,7 +94,7 @@ func (s *server) Session(stream pb.RemoteShell_SessionServer) error {
 	}
 }
 
-func readStream(ctx context.Context, cancel context.CancelFunc, stream pb.RemoteShell_SessionServer, c chan<- *pb.Input) {
+func (s *rshServer) readStream(ctx context.Context, cancel context.CancelFunc, stream pb.RemoteShell_SessionServer, c chan<- *pb.Input) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -107,14 +118,4 @@ func readStream(ctx context.Context, cancel context.CancelFunc, stream pb.Remote
 			c <- in
 		}
 	}
-}
-
-func parseUint16(s string) uint16 {
-	u, err := strconv.ParseUint(s, 10, 16)
-	if err != nil {
-		log.Println("Error parsing uint:", err)
-		return 0
-	}
-
-	return uint16(u)
 }

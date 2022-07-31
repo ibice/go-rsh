@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.20.1
-// source: services.proto
+// source: pb/service.proto
 
-package go_grpc_rsh
+package pb
 
 import (
 	context "context"
@@ -133,5 +133,5 @@ var RemoteShell_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "services.proto",
+	Metadata: "pb/service.proto",
 }

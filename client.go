@@ -1,9 +1,7 @@
-// Package client which will connect to a server and run a Go command.
-package main
+package rsh
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -15,21 +13,68 @@ import (
 	"github.com/mattn/go-tty"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/ibice/go-rsh"
+	"github.com/ibice/go-rsh/pb"
 )
 
-var (
-	port = flag.Uint("port", 22222, "listen port")
-	addr = flag.String("address", "", "listen address")
-)
-
-func address() string {
-	return *addr + fmt.Sprintf(":%d", *port)
+type Client struct {
+	server string
+	creds  credentials.TransportCredentials
 }
 
-func readTTY(ctx context.Context, c chan<- rune) {
+func NewClientInsecure(server string) *Client {
+	return &Client{
+		server: server,
+		creds:  insecure.NewCredentials(),
+	}
+}
+
+func (c *Client) Exec() error {
+	return c.ExecContext(context.Background())
+}
+
+func (c *Client) ExecContext(ctx context.Context) error {
+
+	conn, err := grpc.Dial(c.server, grpc.WithTransportCredentials(c.creds))
+	if err != nil {
+		return fmt.Errorf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	client := pb.NewRemoteShellClient(conn)
+
+	stream, err := client.Session(ctx)
+	if err != nil {
+		return fmt.Errorf("start session: %v", err)
+	}
+
+	var (
+		inc  = make(chan rune, 1024)
+		sigc = make(chan os.Signal, 1)
+	)
+
+	signal.Notify(sigc,
+		syscall.SIGWINCH,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
+
+	go c.readTTY(ctx, inc)
+
+	go c.readStream(ctx, stream)
+
+	sigc <- syscall.SIGWINCH
+
+	c.writeStream(ctx, inc, sigc, stream)
+
+	return nil
+}
+
+func (c *Client) readTTY(ctx context.Context, inc chan<- rune) {
 	tty, err := tty.Open()
 	if err != nil {
 		log.Fatal(err)
@@ -48,18 +93,18 @@ func readTTY(ctx context.Context, c chan<- rune) {
 			if err != nil {
 				fmt.Println("Error reading from terminal:", err)
 			}
-			c <- r
+			inc <- r
 		}
 	}()
 
 	for {
 		<-ctx.Done()
-		close(c)
+		close(inc)
 		return
 	}
 }
 
-func readStream(ctx context.Context, stream pb.RemoteShell_SessionClient) {
+func (c *Client) readStream(ctx context.Context, stream pb.RemoteShell_SessionClient) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -77,7 +122,7 @@ func readStream(ctx context.Context, stream pb.RemoteShell_SessionClient) {
 	}
 }
 
-func writeStream(ctx context.Context, inc <-chan rune, sigc <-chan os.Signal,
+func (c *Client) writeStream(ctx context.Context, inc <-chan rune, sigc <-chan os.Signal,
 	stream pb.RemoteShell_SessionClient) {
 
 	for {
@@ -116,44 +161,4 @@ func writeStream(ctx context.Context, inc <-chan rune, sigc <-chan os.Signal,
 			return
 		}
 	}
-}
-
-func main() {
-	flag.Parse()
-
-	conn, err := grpc.Dial(address(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Could not connect: %v", err)
-	}
-
-	defer conn.Close()
-
-	c := pb.NewRemoteShellClient(conn)
-
-	stream, err := c.Session(context.Background())
-	if err != nil {
-		panic(err)
-	}
-
-	var (
-		ctx  = stream.Context()
-		inc  = make(chan rune, 1024)
-		sigc = make(chan os.Signal, 1)
-	)
-
-	signal.Notify(sigc,
-		syscall.SIGWINCH,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGQUIT,
-		syscall.SIGTERM,
-	)
-
-	go readTTY(ctx, inc)
-
-	go readStream(ctx, stream)
-
-	sigc <- syscall.SIGWINCH
-
-	writeStream(ctx, inc, sigc, stream)
 }

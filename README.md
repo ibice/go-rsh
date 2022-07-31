@@ -1,9 +1,15 @@
 # Remote shell over gRPC
 
-This project demonstrates how a remote shell session can be spawned using gRPC as transport.
-It contains a library, client and a server CLIs.
+> Like `ssh` or `kubectl exec`, but over gRPC.
 
-No authorization is made and all session requests are accepted.
+This library contains code to run remote commands using the [gRPC framework].
+Apart from the library, [client](cmd/client/main.go) and [server](cmd/server/main.go) CLIs are included.
+
+Features:
+
+- Execute arbitrary processes other than the server shell.
+- Interactive PTY sessions used to run the commands.
+- Client is able to exit using the exit code of the remote command.
 
 ## Usage
 
@@ -23,3 +29,13 @@ You'll need to have go > 1.18 installed.
 
 Server and client use `127.0.0.1:22222` for the connections by default.
 
+
+## Building
+
+Run:
+
+```bash
+make
+```
+
+[gRPC framework]: https://grpc.io

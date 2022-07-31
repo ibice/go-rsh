@@ -1,6 +1,6 @@
 package main
 
-import pb "github.com/carpioldc/go-rsh-grpc"
+import pb "github.com/ibice/go-rsh"
 
 type streamWriter struct {
 	stream pb.RemoteShell_SessionServer

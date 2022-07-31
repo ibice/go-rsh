@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	pb "github.com/carpioldc/go-rsh-grpc"
+	pb "github.com/ibice/go-rsh"
 )
 
 var (

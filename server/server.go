@@ -12,7 +12,7 @@ import (
 
 	"github.com/creack/pty"
 
-	pb "github.com/carpioldc/go-rsh-grpc"
+	pb "github.com/ibice/go-rsh"
 )
 
 type server struct {

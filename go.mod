@@ -1,4 +1,4 @@
-module github.com/carpioldc/go-rsh-grpc
+module github.com/ibice/go-rsh
 
 go 1.18
 

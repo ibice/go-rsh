@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/carpioldc/go-rsh-grpc"
+	pb "github.com/ibice/go-rsh"
 )
 
 var (
